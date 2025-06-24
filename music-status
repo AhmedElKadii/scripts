@@ -1,0 +1,37 @@
+#!/bin/sh
+
+MAXLEN=23
+
+# Always output current status and song info
+status=$(playerctl status 2>/dev/null)
+icon=""
+case "$status" in
+  Playing) icon="󰏤" ;;
+  Paused)  icon="󰐊" ;;
+  *)       icon="" ;;
+esac
+
+title=$(playerctl metadata title 2>/dev/null)
+artist=$(playerctl metadata artist 2>/dev/null)
+
+# Crop before '(' if exists
+if echo "$title" | grep -q '('; then
+  title=$(echo "$title" | sed 's/ *(.*//')
+fi
+
+if echo "$artist" | grep -q '('; then
+  artist=$(echo "$artist" | sed 's/ *(.*//')
+fi
+
+# Truncate with ellipsis if longer than MAXLEN
+if [ ${#title} -gt $MAXLEN ]; then
+  title="${title:0:$MAXLEN}..."
+fi
+
+if [ ${#artist} -gt $MAXLEN ]; then
+  artist="${artist:0:$MAXLEN}..."
+fi
+
+if [ -n "$title" ] && [ -n "$artist" ]; then
+  echo "$icon $title |"
+fi

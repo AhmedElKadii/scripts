@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# dmenu-kill.sh — choose a window and kill it
+
+# List window titles, select one with dmenu, and kill it
+chosen=$(xdotool search --onlyvisible --name "" getwindowname %@ | sort | uniq | dmenu -i -p "Kill window:")
+
+[ -n "$chosen" ] || exit
+
+# Get the window ID and kill the window
+win_id=$(xdotool search --onlyvisible --name "$chosen" | head -n 1)
+xdotool windowkill "$win_id"
+

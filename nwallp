@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+# Folder where wallpapers are stored
+WALLPAPER_DIR="$HOME/Pictures/Wallpapers"
+
+# Pick a random wallpaper file
+WALLPAPER=$(find "$WALLPAPER_DIR" -type f | shuf -n1)
+
+# Generate wal colors based on that wallpaper
+wal -i "$WALLPAPER"
+
+# Apply Xresources colors for st and others
+xrdb -merge "$HOME/.cache/wal/colors.Xresources"
+
+# Set wallpaper with feh
+feh --bg-scale "$WALLPAPER"
+

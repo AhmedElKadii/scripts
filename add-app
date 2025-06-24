@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+# Prompt for input with dmenu
+INPUT=$(dmenu-color -c -l 2 < /dev/null)
+
+# Check if input is not empty
+if [ -n "$INPUT" ]; then
+    echo "$INPUT" >> ~/.config/scripts/.apps
+fi

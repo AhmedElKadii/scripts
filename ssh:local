@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+st ssh -o 'Port 3000' kaffae@192.168.1.100

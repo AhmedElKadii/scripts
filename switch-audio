@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+# Replace with your actual sink names from `pactl list short sinks`
+SPEAKERS="bluez_output.2F_6F_0C_BD_E9_C3.1"
+HEADPHONES="alsa_output.pci-0000_2b_00.1.hdmi-stereo"
+
+# Use dmenu to choose
+CHOICE=$(printf "headphones\nspeakers" | dmenu-color -c -l 2)
+
+# Decide the target sink
+case "$CHOICE" in
+    speakers)
+        TARGET="$SPEAKERS"
+        ;;
+    headphones)
+        TARGET="$HEADPHONES"
+        ;;
+    *)
+        exit 1  # Exit silently on cancel or invalid choice
+        ;;
+esac
+
+# Set default sink
+pactl set-default-sink "$TARGET"
+
+# Move current playing audio to the selected sink
+for INPUT in $(pactl list short sink-inputs | awk '{print $1}'); do
+    pactl move-sink-input "$INPUT" "$TARGET"
+done
+
+# Optional: Notify
+notify-send "Audio Switched" "Now using $CHOICE"

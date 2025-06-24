@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+maim -s -o | tesseract - - -l eng | xclip -selection clipboard

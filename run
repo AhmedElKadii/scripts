@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+sort ~/.config/scripts/.apps | dmenu-color -c -l 10 "$@" | ${SHELL:-"/bin/sh"} &

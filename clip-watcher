@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+# Clear previous history
+rm -f /home/Kaffae/.cache/cliphist/db
+
+# Start watcher loop
+while true; do
+  xclip -o -selection clipboard | cliphist store 2>/dev/null
+  xclip -o -selection primary | cliphist store 2>/dev/null
+  sleep 1
+done

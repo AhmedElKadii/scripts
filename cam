@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+choice=$(ls /dev/video* | dmenu-color -c -l 5)
+[ -z "$choice" ] && exit 0
+
+ffplay -f v4l2 -input_format mjpeg -video_size 1280x720 -framerate 60 "$choice" &

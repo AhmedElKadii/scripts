@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+choice=$( (echo "@clear"; cliphist list) | dmenu-color -c -l 10)
+
+# If ESC or nothing selected, exit quietly
+[ -z "$choice" ] && exit 0
+
+# If "@clear" is selected, nuke clipboard + history
+if [ "$choice" = "@clear" ]; then
+  printf '' | xclip -selection clipboard
+  printf '' | xclip -selection primary
+  rm -f ~/.cache/cliphist/db
+  notify-send "Clipboard cleared"
+  exit 0
+fi
+
+# Otherwise, decode and copy to clipboard
+echo "$choice" | cliphist decode | xclip -selection clipboard
+# xdotool key --clearmodifiers ctrl+v

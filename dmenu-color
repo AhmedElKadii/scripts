@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# Wrapper for dmenu with pywal/Xresources support
+
+get_color() {
+    xrdb -query | grep -m1 "$1" | awk -F: '{ print $2 }' | xargs
+}
+
+nb=$(get_color "\*background");  [ -z "$nb" ] && nb="#2e3440"
+nf=$(get_color "\*foreground");  [ -z "$nf" ] && nf="#d8dee9"
+sb=$(get_color "\*color4");      [ -z "$sb" ] && sb="#5e81ac"
+sf=$(get_color "\*color7");      [ -z "$sf" ] && sf="#eceff4"
+
+# Pass stdin to real dmenu with extra args and theme
+dmenu -nb "$nb" -nf "$nf" -sb "$sb" -sf "$sf" "$@"
+

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+folder="$HOME/Notes/"
+mkdir -p "$folder"
+
+newnote() {
+    name="$(echo "" | dmenu-color -c <&-)" || exit 0
+    : "${name:=$(date "+%H-%M-%S_%b-%d-%Y")}"
+    [[ "$name" != *.md ]] && name="$name.md"
+    setsid -f st -e nvim "$folder$name" >/dev/null 2>&1
+}
+
+selected() {
+    choice=$(echo -e "...\n$(ls -1t "$folder")" | dmenu-color -c -l 5 -i)
+    case $choice in
+        ...) newnote ;;
+        *.md) setsid -f st -e nvim "$folder$choice" >/dev/null 2>&1 ;;
+        *) exit ;;
+    esac
+}
+
+selected
