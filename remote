@@ -84,7 +84,7 @@ if [[ "$ACTION" == "mount" ]]; then
             notify-send "SSHFS" "Mounted $REMOTE_DIR" ||
             notify-send "SSHFS" "Failed to mount $REMOTE_DIR"
 
-		st -e bash -c "cd '$MOUNT_POINT' && exec bash"
+		st -e zsh -c "cd '$MOUNT_POINT' && exec zsh"
     fi
 
 

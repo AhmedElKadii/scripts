@@ -1,0 +1,53 @@
+#!/usr/bin/env zsh
+
+folder="$HOME/Books/"
+mkdir -p "$folder"
+
+if [[ -d "$folder.git" ]]; then
+    echo "Updating books repository..."
+    cd "$folder" && git pull
+elif [[ -d "$folder" ]] && git -C "$folder" rev-parse --git-dir >/dev/null 2>&1; then
+    echo "Updating books repository..."
+    git -C "$folder" pull
+fi
+
+commit_script="$folder.auto-commit.sh"
+cat > "$commit_script" << 'EOF'
+#!/bin/bash
+folder="$1"
+filename="$2"
+if git -C "$folder" rev-parse --git-dir >/dev/null 2>&1; then
+    cd "$folder"
+    git add .
+    git commit -m "Updated: $filename - $(date '+%Y-%m-%d %H:%M')" 2>/dev/null
+    git push 2>/dev/null &
+fi
+EOF
+chmod +x "$commit_script"
+
+newbook() {
+    name="$(echo "" | dmenu-color -c <&-)" || exit 0
+    : "${name:=newbook}"
+    
+    if [[ -d "$folder.template" ]]; then
+        cp -r "$folder.template" "$folder$name"
+    else
+        mkdir -p "$folder$name"  # fallback if no template exists
+    fi
+    
+    setsid -f st -e sh -c "cd '$folder$name' && nvim -c 'autocmd VimLeave * !$folder.auto-commit.sh \"$folder\" \"$name\"'" >/dev/null 2>&1
+}
+
+selected() {
+    choice=$(echo -e "...\n$(ls -1t "$folder" | grep -v '.template')" | dmenu-color -c -l 5 -i)
+    case $choice in
+        ...) newbook ;;
+        *) 
+            if [[ -d "$folder$choice" ]]; then
+                setsid -f st -e sh -c "cd '$folder$choice' && nvim -c 'autocmd VimLeave * !$folder.auto-commit.sh \"$folder\" \"$choice\"'" >/dev/null 2>&1
+            fi
+            ;;
+    esac
+}
+
+selected

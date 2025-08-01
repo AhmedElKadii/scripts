@@ -1,0 +1,3 @@
+#!/usr/bin/env zsh
+
+google-chrome-stable --app=https://linear.app/kodeflowstudios/team/KOD/active

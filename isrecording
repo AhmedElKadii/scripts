@@ -1,0 +1,12 @@
+#!/usr/bin/env zsh
+
+# Recording status script for dwm status bar
+# Returns recording symbol if recording is active, otherwise nothing
+
+CACHE_FILE="$HOME/.cache/recording"
+
+if [[ -f "$CACHE_FILE" ]]; then
+    echo "[REC] |"
+else
+    echo ""  # Return nothing when not recording
+fi

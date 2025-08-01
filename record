@@ -1,0 +1,80 @@
+#!/usr/bin/env zsh
+
+# Screen recording script for Arch Linux with dwm
+# Usage: ./record.sh [start|stop|toggle]
+
+CACHE_FILE="$HOME/.cache/recording"
+RECORDING_DIR="$HOME/Videos/recordings"
+DATE=$(date +"%Y%m%d_%H%M%S")
+OUTPUT_FILE="$RECORDING_DIR/recording_$DATE.mp4"
+
+# Create recordings directory if it doesn't exist
+mkdir -p "$RECORDING_DIR"
+
+is_recording() {
+    [[ -f "$CACHE_FILE" ]]
+}
+
+start_recording() {
+    if is_recording; then
+        echo "Already recording!"
+        exit 1
+    fi
+    
+    echo "recording" > "$CACHE_FILE"
+    echo "Started recording to: $OUTPUT_FILE"
+    
+    # Get screen resolution using xrandr (more reliable than xdpyinfo)
+    RESOLUTION=$(xrandr | grep '\*' | head -n1 | awk '{print $1}')
+    
+    # Fallback if xrandr fails - let ffmpeg auto-detect
+    if [[ -z "$RESOLUTION" ]]; then
+        echo "Auto-detecting screen size..."
+        ffmpeg -f x11grab -i :0.0 -c:v libx264 -preset ultrafast -crf 18 "$OUTPUT_FILE" &
+    else
+        echo "Recording at resolution: $RESOLUTION"
+        ffmpeg -f x11grab -s "$RESOLUTION" -i :0.0 -c:v libx264 -preset ultrafast -crf 18 "$OUTPUT_FILE" &
+    fi
+    
+    # Store ffmpeg PID in cache file for killing later
+    echo $! >> "$CACHE_FILE"
+}
+
+stop_recording() {
+    if ! is_recording; then
+        echo "Not currently recording!"
+        exit 1
+    fi
+    
+    # Get ffmpeg PID and kill it
+    FFMPEG_PID=$(tail -n 1 "$CACHE_FILE")
+    kill "$FFMPEG_PID" 2>/dev/null
+    
+    # Remove cache file
+    rm -f "$CACHE_FILE"
+    echo "Recording stopped and saved"
+}
+
+toggle_recording() {
+    if is_recording; then
+        stop_recording
+    else
+        start_recording
+    fi
+}
+
+case "${1:-toggle}" in
+    start)
+        start_recording
+        ;;
+    stop)
+        stop_recording
+        ;;
+    toggle)
+        toggle_recording
+        ;;
+    *)
+        echo "Usage: $0 [start|stop|toggle]"
+        exit 1
+        ;;
+esac

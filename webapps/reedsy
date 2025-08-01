@@ -1,0 +1,20 @@
+#!/usr/bin/env zsh
+
+declare -A links=(
+    ["..."]="https://editor.reedsy.com/"
+    ["Cipher Protocol"]="https://editor.reedsy.com/book/18871624-a93e-4c8b-9c09-6be92ffc791e"
+)
+
+selected=$(printf '%s\n' "${(@k)links}" | sort | dmenu-color -c -l 5 -i)
+
+if [ -z "$selected" ]; then
+    exit 0
+fi
+
+url="${links[$selected]}"
+if [ -n "$url" ]; then
+    google-chrome-stable --app="$url"
+else
+    echo "Error: No URL found for '$selected'"
+    exit 1
+fi

@@ -1,0 +1,3 @@
+#!/usr/bin/env zsh
+
+st -e zsh -c 'transmission-cli "$@" ; echo "Press Enter to exit..." ; read' -- "$@"

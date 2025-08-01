@@ -1,0 +1,167 @@
+#!/usr/bin/env zsh
+
+# Git initialization script with GitHub integration
+# Usage: ./git-init.zsh <repository-name>
+
+set -e  # Exit on any error
+
+# Check if repository name is provided
+if [[ $# -eq 0 ]]; then
+    echo "Usage: $0 <repository-name>"
+    echo "Example: $0 my-awesome-project"
+    exit 1
+fi
+
+REPO_NAME="$1"
+
+# Validate repository name (basic GitHub naming rules)
+if [[ ! "$REPO_NAME" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+    echo "Error: Repository name can only contain alphanumeric characters, periods, hyphens, and underscores"
+    exit 1
+fi
+
+# Check if git is installed
+if ! command -v git &> /dev/null; then
+    echo "Error: git is not installed or not in PATH"
+    exit 1
+fi
+
+# Check if gh CLI is installed for GitHub integration
+if ! command -v gh &> /dev/null; then
+    echo "Warning: GitHub CLI (gh) is not installed. Skipping GitHub repository check."
+    echo "Install it with: brew install gh (macOS) or visit https://cli.github.com/"
+    SKIP_GITHUB_CHECK=true
+else
+    SKIP_GITHUB_CHECK=false
+fi
+
+# Check if already a git repository
+if [[ -d .git ]]; then
+    echo "Directory is already a git repository"
+    exit 0
+fi
+
+# Check if repository already exists on GitHub
+if [[ "$SKIP_GITHUB_CHECK" == "false" ]]; then
+    echo "Checking if repository '$REPO_NAME' already exists on GitHub..."
+    
+    # Get GitHub username
+    GITHUB_USER=$(gh auth status 2>&1 | grep -o "Logged in to github.com as [^[:space:]]*" | cut -d' ' -f6 || echo "")
+    
+    if [[ -z "$GITHUB_USER" ]]; then
+        echo "Warning: Not logged in to GitHub CLI. Run 'gh auth login' first."
+        echo "Proceeding with local git initialization only..."
+    else
+        # Check if repo exists
+        if gh repo view "$GITHUB_USER/$REPO_NAME" &> /dev/null; then
+            echo "Error: Repository '$REPO_NAME' already exists on GitHub under your account"
+            echo "Choose a different name or delete the existing repository first"
+            exit 1
+        else
+            echo "✅ Repository name '$REPO_NAME' is available on GitHub"
+        fi
+    fi
+fi
+
+# Initialize git repository
+echo "Initializing git repository in $(pwd)..."
+git init
+
+# Create initial .gitignore if it doesn't exist
+if [[ ! -f .gitignore ]]; then
+    echo "Creating basic .gitignore..."
+    cat > .gitignore << 'EOF'
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Dependency directories
+node_modules/
+EOF
+fi
+
+# Create README.md if it doesn't exist
+if [[ ! -f README.md ]]; then
+    echo "Creating README.md..."
+    cat > README.md << EOF
+# $REPO_NAME
+
+Description of your project goes here.
+
+## Installation
+
+\`\`\`bash
+# Add installation instructions
+\`\`\`
+
+## Usage
+
+\`\`\`bash
+# Add usage examples
+\`\`\`
+
+## Contributing
+
+Pull requests are welcome!
+
+## License
+
+Add license information here.
+EOF
+fi
+
+# Add all files to staging
+echo "Adding files to git..."
+git add .
+
+# Create initial commit
+echo "Creating initial commit..."
+git commit -m "Initial commit"
+
+# Offer to create GitHub repository
+if [[ "$SKIP_GITHUB_CHECK" == "false" && -n "$GITHUB_USER" ]]; then
+    echo ""
+    echo "Would you like to create the repository on GitHub and push? (y/N)"
+    read -r response
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        echo "Creating repository on GitHub..."
+        gh repo create "$REPO_NAME" --public --source=. --remote=origin --push
+        echo "✅ Repository created on GitHub and pushed successfully!"
+    else
+        echo "Repository initialized locally. To create on GitHub later, run:"
+        echo "  gh repo create $REPO_NAME --public --source=. --remote=origin --push"
+    fi
+else
+    echo ""
+    echo "Repository initialized locally. To create on GitHub later:"
+    echo "1. Install GitHub CLI: brew install gh"
+    echo "2. Login: gh auth login"
+    echo "3. Create repo: gh repo create $REPO_NAME --public --source=. --remote=origin --push"
+fi
+
+echo ""
+echo "✅ Git repository '$REPO_NAME' initialized successfully!"
+echo "Current status:"
+git status
