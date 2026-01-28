@@ -1,110 +1,81 @@
 #!/usr/bin/env bash
 
-# === Config ===
-REMOTE_HOST="kaffae@192.168.1.100"
-REMOTE_PORT=3000
-LOCAL_BASE="$HOME/.remote"
-MOUNT_MAP="$LOCAL_BASE/mounts.map"
-DMENU="${DMENU:-dmenu-color -c -i -l 10}"
+# Configuration
+LOCAL_DIR="$HOME/.remote"
+REMOTE_USER="kaffae"
+REMOTE_HOST="192.168.1.100"
+REMOTE_PORT="3000"
+REMOTE_DIR="/var/www/kodeflowstudios.com"
+SSH_KEY="$HOME/.ssh/id_rsa"
 
-mkdir -p "$LOCAL_BASE"
-touch "$MOUNT_MAP"
+# Create local directory if it doesn't exist
+mkdir -p "$LOCAL_DIR"
 
-# === Helper: Get remote dir list ===
-list_remote_dirs() {
-    ssh -p "$REMOTE_PORT" "$REMOTE_HOST" 'find / -type d -maxdepth 6 2>/dev/null' | grep -v '/\.' | sort
-}
-
-# === Helper: Lookup remote path for local folder ===
-get_remote_path() {
-    grep "^$1|" "$MOUNT_MAP" | cut -d'|' -f2
-}
-
-# === Helper: Add to map ===
-add_to_map() {
-    echo "$1|$2" >> "$MOUNT_MAP"
-}
-
-# === Helper: Remove from map ===
-remove_from_map() {
-    sed -i "/^$1|/d" "$MOUNT_MAP"
-}
-
-# === Main Menu ===
-ACTION=$(printf "mount\nunmount" | $DMENU)
-[ -z "$ACTION" ] && notify-send "SSHFS" "Cancelled" && exit 0
-
-if [[ "$ACTION" == "mount" ]]; then
-    # List from mounts.map
-    OPTIONS=$(cut -d'|' -f1 "$MOUNT_MAP")
-    CHOICE=$(printf "...\n$OPTIONS" | $DMENU)
-	[ -z "$CHOICE" ] && notify-send "SSHFS" "Cancelled" && exit 0
-
-    if [[ "$CHOICE" == "..." ]]; then
-        # Add a new mount
-        REMOTE_DIR=$(list_remote_dirs | $DMENU)
-        [ -z "$REMOTE_DIR" ] && notify-send "SSHFS" "Cancelled" && exit 0
-
-        LOCAL_NAME=$(basename "$REMOTE_DIR")
-        [ -z "$LOCAL_NAME" ] && notify-send "SSHFS" "Invalid folder name" && exit 1
-
-        MOUNT_POINT="$LOCAL_BASE/$LOCAL_NAME"
-        mkdir -p "$MOUNT_POINT"
-
-		if mount | grep -q "$MOUNT_POINT"; then
-			notify-send "SSHFS" "$MOUNT_POINT is already mounted"
-			exit 0
-		fi
-
-		if grep -q "|$REMOTE_DIR\$" "$MOUNT_MAP"; then
-			notify-send "SSHFS" "Path already mapped"
-			exit 0
-		fi
-
-        sshfs -o port=$REMOTE_PORT,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 "$REMOTE_HOST:$REMOTE_DIR" "$MOUNT_POINT" &&
-            add_to_map "$LOCAL_NAME" "$REMOTE_DIR" &&
-            notify-send "SSHFS" "Mounted $REMOTE_DIR at $MOUNT_POINT" ||
-            notify-send "SSHFS" "Failed to mount $REMOTE_DIR"
-
-		st -e bash -c "cd '$MOUNT_POINT' && exec bash"
+# Function to sync to remote
+sync_to_remote() {
+    echo "Syncing to remote..."
+    rsync -avz --delete -e "ssh -i $SSH_KEY -p $REMOTE_PORT" \
+        "$LOCAL_DIR/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/"
+    
+    if [ $? -eq 0 ]; then
+        osascript -e "display notification \"Files synced to server\" with title \"Sync Complete\""
     else
-        REMOTE_DIR=$(get_remote_path "$CHOICE")
-		[ -z "$REMOTE_DIR" ] && notify-send "SSHFS" "Cancelled" && exit 0
-        [ -z "$REMOTE_DIR" ] && notify-send "SSHFS" "Missing map for $CHOICE" && exit 1
-
-        MOUNT_POINT="$LOCAL_BASE/$CHOICE"
-        mkdir -p "$MOUNT_POINT"
-
-		if mount | grep -q "$MOUNT_POINT"; then
-			notify-send "SSHFS" "$MOUNT_POINT is already mounted"
-			exit 0
-		fi
-
-        sshfs -o port=$REMOTE_PORT,reconnect,ServerAliveInterval=15,ServerAliveCountMax=3 "$REMOTE_HOST:$REMOTE_DIR" "$MOUNT_POINT" &&
-            notify-send "SSHFS" "Mounted $REMOTE_DIR" ||
-            notify-send "SSHFS" "Failed to mount $REMOTE_DIR"
-
-		st -e zsh -c "cd '$MOUNT_POINT' && exec zsh"
+        osascript -e "display notification \"Sync failed!\" with title \"Sync Error\""
     fi
+}
 
-
-elif [[ "$ACTION" == "unmount" ]]; then
-    MOUNTS=$(mount | grep "$LOCAL_BASE" | awk '{print $3}' | xargs -n1 basename)
-    [ -z "$MOUNTS" ] && notify-send "SSHFS" "No mounts to unmount" && exit 0
-
-    UNMOUNT_CHOICE=$(printf "$MOUNTS" | $DMENU)
-    [ -z "$UNMOUNT_CHOICE" ] && notify-send "SSHFS" "Cancelled" && exit 0
-
-    MOUNT_POINT="$LOCAL_BASE/$UNMOUNT_CHOICE"
-    fusermount3 -u "$MOUNT_POINT" &&
-        notify-send "SSHFS" "Unmounted $UNMOUNT_CHOICE" ||
-        { notify-send "SSHFS" "Failed to unmount $UNMOUNT_CHOICE"; exit 1; }
-
-    # Remove if empty
-    if [ -d "$MOUNT_POINT" ] && [ -z "$(ls -A "$MOUNT_POINT")" ]; then
-        rmdir "$MOUNT_POINT"
-        notify-send "SSHFS" "Removed empty folder $UNMOUNT_CHOICE"
+# Function to sync from remote
+sync_from_remote() {
+    echo "Syncing from remote..."
+    rsync -avz --delete -e "ssh -i $SSH_KEY -p $REMOTE_PORT" \
+        "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR/" "$LOCAL_DIR/"
+    
+    if [ $? -eq 0 ]; then
+        osascript -e "display notification \"Files synced from server\" with title \"Sync Complete\""
     fi
+}
+
+# Menu system
+if [ "$1" = "watch" ]; then
+    echo "Starting file watcher..."
+    echo "Watching $LOCAL_DIR for changes..."
+    
+    # Initial sync from remote
+    sync_from_remote
+    
+    # Watch for changes and sync
+    fswatch -o "$LOCAL_DIR" | while read num; do
+        echo "Changes detected, syncing..."
+        sync_to_remote
+    done
+    
+elif [ "$1" = "up" ]; then
+    sync_to_remote
+    
+elif [ "$1" = "down" ]; then
+    sync_from_remote
+    
+elif [ "$1" = "edit" ]; then
+    # Sync down, open editor, then watch for changes
+    sync_from_remote
+    cd "$LOCAL_DIR"
+    
+    # Start watcher in background
+    fswatch -o "$LOCAL_DIR" | while read num; do
+        sync_to_remote
+    done &
+    WATCHER_PID=$!
+    
+    # Open neovim
+    nvim .
+    
+    # Kill watcher when nvim exits
+    kill $WATCHER_PID 2>/dev/null
+    
 else
-    notify-send "SSHFS" "No action taken"
+    echo "Usage: $0 {watch|up|down|edit}"
+    echo "  watch - Start continuous sync on file changes"
+    echo "  up    - Sync local files to remote"  
+    echo "  down  - Sync remote files to local"
+    echo "  edit  - Sync down, open nvim, auto-sync changes"
 fi

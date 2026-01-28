@@ -1,16 +1,17 @@
 #!/bin/sh
 
-# Wrapper for dmenu with pywal/Xresources support
+WAL_COLORS="$HOME/.cache/wal/colors"
 
-get_color() {
-    xrdb -query | grep -m1 "$1" | awk -F: '{ print $2 }' | xargs
-}
+# Safety check
+[ ! -f "$WAL_COLORS" ] && echo "Pywal colors not found! Run wal first." && exit 1
 
-nb=$(get_color "\*background");  [ -z "$nb" ] && nb="#2e3440"
-nf=$(get_color "\*foreground");  [ -z "$nf" ] && nf="#d8dee9"
-sb=$(get_color "\*color4");      [ -z "$sb" ] && sb="#5e81ac"
-sf=$(get_color "\*color7");      [ -z "$sf" ] && sf="#eceff4"
+# Read needed colors
+background=$(sed -n '1p' "$WAL_COLORS")
+foreground=$(sed -n '2p' "$WAL_COLORS")
+color4=$(sed -n '7p' "$WAL_COLORS")   # color4 for highlight
 
-# Pass stdin to real dmenu with extra args and theme
-dmenu -nb "$nb" -nf "$nf" -sb "$sb" -sf "$sf" "$@"
+highlight_color="${color4#\#}"
+selected_bg="${background#\#}"
 
+# Launch choose with InconsolataGo Mono and pywal colors
+choose -f "InconsolataGo Nerd Font Mono" -s 30 -c "$highlight_color" -b "$selected_bg" "$@" -n 10

@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# Get background color
+bg=$(head -n1 ~/.cache/wal/colors)
+# Get a contrasting foreground color  
+fg=$(sed -n '8p' ~/.cache/wal/colors)  # Usually a bright color
+echo -e "\033]12;${fg}\007"

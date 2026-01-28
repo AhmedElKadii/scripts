@@ -1,0 +1,14 @@
+#!/usr/bin/env zsh
+# Native macOS centered launcher
+apps=$(ls /Applications | sed 's/\.app$//' | tr '\n' ',')
+choice=$(osascript << EOF
+tell application "System Events"
+    set appList to {"${apps%,}"}
+    choose from list appList with prompt "Launch application:" default items {item 1 of appList}
+end tell
+EOF
+)
+
+if [ "$choice" != "false" ]; then
+    open -a "$choice"
+fi

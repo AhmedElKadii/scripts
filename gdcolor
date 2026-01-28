@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# Path to pywal colors
+COLORS_FILE="$HOME/.cache/wal/colors.json"
+
+# Check if colors file exists
+if [[ ! -f "$COLORS_FILE" ]]; then
+    echo "Error: Pywal colors file not found at $COLORS_FILE"
+    echo "Make sure you've run pywal at least once: wal -i /path/to/image"
+    exit 1
+fi
+
+# Check if jq is installed
+if ! command -v jq &> /dev/null; then
+    echo "Error: jq is required but not installed."
+    echo "Install with: brew install jq"
+    exit 1
+fi
+
+# Extract colors using jq
+BACKGROUND=$(jq -r '.special.background' "$COLORS_FILE")
+ACCENT=$(jq -r '.colors.color1' "$COLORS_FILE")
+
+# Fallback to color0 if special.background is null
+if [[ "$BACKGROUND" == "null" ]]; then
+    BACKGROUND=$(jq -r '.colors.color0' "$COLORS_FILE")
+fi
+
+# Print results
+echo "Godot Editor Theme Colors:"
+echo "=========================="
+echo "Background: $BACKGROUND"
+echo "Accent:     $ACCENT"

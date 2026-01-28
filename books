@@ -19,15 +19,27 @@ filename="$2"
 if git -C "$folder" rev-parse --git-dir >/dev/null 2>&1; then
     cd "$folder"
     git add .
-    git commit -m "Updated: $filename - $(date '+%Y-%m-%d %H:%M')" 2>/dev/null
-    git push 2>/dev/null &
+    if git commit -m "Updated: $filename - $(date '+%Y-%m-%d %H:%M')" 2>/dev/null; then
+        echo "Committed changes for: $filename"
+        git push 2>/dev/null &
+        echo "Pushing changes in background..."
+    else
+        echo "No changes to commit for: $filename"
+    fi
+else
+    echo "Not a git repository: $folder"
 fi
 EOF
 chmod +x "$commit_script"
 
 newbook() {
-    name="$(echo "" | dmenu-color -c <&-)" || exit 0
-    : "${name:=newbook}"
+    # Get input directly from terminal
+    echo -n "Enter book name: "
+    read name
+    
+    # Exit if no name provided
+    [[ -z "$name" ]] && echo "No name provided, exiting." && exit 0
+    
     
     if [[ -d "$folder.template" ]]; then
         cp -r "$folder.template" "$folder$name"
@@ -35,16 +47,22 @@ newbook() {
         mkdir -p "$folder$name"  # fallback if no template exists
     fi
     
-    setsid -f st -e sh -c "cd '$folder$name' && nvim -c 'autocmd VimLeave * !$folder.auto-commit.sh \"$folder\" \"$name\"'" >/dev/null 2>&1
+    # Run nvim with auto-commit on exit
+    cd "$folder$name" && nvim -c "autocmd VimLeave * !$commit_script '$folder' '$name'"
 }
 
 selected() {
     choice=$(echo -e "...\n$(ls -1t "$folder" | grep -v '.template')" | dmenu-color -c -l 5 -i)
+    
     case $choice in
-        ...) newbook ;;
+        ...) 
+            newbook 
+            ;;
         *) 
             if [[ -d "$folder$choice" ]]; then
-                setsid -f st -e sh -c "cd '$folder$choice' && nvim -c 'autocmd VimLeave * !$folder.auto-commit.sh \"$folder\" \"$choice\"'" >/dev/null 2>&1
+                cd "$folder$choice" && nvim -c "autocmd VimLeave * !$commit_script '$folder' '$choice'"
+            else
+                echo "Error: Directory '$folder$choice' does not exist!"
             fi
             ;;
     esac

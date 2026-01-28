@@ -1,0 +1,13 @@
+#!/usr/bin/env zsh
+
+# Get the selected wallpaper (full path)
+choice=$(find ~/Pictures/Wallpapers -type f | choose)
+
+# If user cancelled, exit
+[[ -z "$choice" ]] && exit
+
+# Generate colors with pywal (no wallpaper setting)
+wal -i "$choice" -n
+
+# Set wallpaper using AppleScript
+osascript -e "tell application \"System Events\" to tell every desktop to set picture to \"$choice\""

@@ -1,0 +1,82 @@
+#!/bin/bash
+
+# Paths
+COLORS_FILE="$HOME/.cache/wal/colors.json"
+GODOT_SETTINGS="$HOME/Library/Application Support/Godot/editor_settings-4.4.tres"
+
+# Check if colors file exists
+if [[ ! -f "$COLORS_FILE" ]]; then
+    echo "Error: Pywal colors file not found at $COLORS_FILE"
+    echo "Make sure you've run pywal at least once: wal -i /path/to/image"
+    exit 1
+fi
+
+# Check if Godot settings file exists
+if [[ ! -f "$GODOT_SETTINGS" ]]; then
+    echo "Error: Godot settings file not found at $GODOT_SETTINGS"
+    echo "Make sure you've opened Godot at least once to create the settings file"
+    exit 1
+fi
+
+# Check if jq is installed
+if ! command -v jq &> /dev/null; then
+    echo "Error: jq is required but not installed."
+    echo "Install with: brew install jq"
+    exit 1
+fi
+
+# Function to convert hex to Godot Color format
+hex_to_godot_color() {
+    local hex=$1
+    hex=${hex#"#"}
+    local r=$((16#${hex:0:2}))
+    local g=$((16#${hex:2:2}))
+    local b=$((16#${hex:4:2}))
+    
+    # Convert to 0-1 range for Godot
+    local r_float=$(echo "scale=6; $r / 255" | bc)
+    local g_float=$(echo "scale=6; $g / 255" | bc)
+    local b_float=$(echo "scale=6; $b / 255" | bc)
+    
+    echo "Color($r_float, $g_float, $b_float, 1)"
+}
+
+# Extract colors from pywal
+BACKGROUND_HEX=$(jq -r '.special.background' "$COLORS_FILE")
+ACCENT_HEX=$(jq -r '.colors.color1' "$COLORS_FILE")
+
+# Fallback to color0 if special.background is null
+if [[ "$BACKGROUND_HEX" == "null" ]]; then
+    BACKGROUND_HEX=$(jq -r '.colors.color0' "$COLORS_FILE")
+fi
+
+# Convert to Godot format
+BACKGROUND_COLOR=$(hex_to_godot_color "$BACKGROUND_HEX")
+ACCENT_COLOR=$(hex_to_godot_color "$ACCENT_HEX")
+
+echo "Updating Godot theme with pywal colors..."
+echo "Background: $BACKGROUND_HEX -> $BACKGROUND_COLOR"
+echo "Accent: $ACCENT_HEX -> $ACCENT_COLOR"
+
+# Create backup
+cp "$GODOT_SETTINGS" "$GODOT_SETTINGS.backup.$(date +%Y%m%d_%H%M%S)"
+echo "Created backup: $GODOT_SETTINGS.backup.$(date +%Y%m%d_%H%M%S)"
+
+# Update the settings file
+# First ensure the theme is set to Custom
+sed -i '' 's/^interface\/theme\/preset = .*/interface\/theme\/preset = "Custom"/' "$GODOT_SETTINGS"
+
+# Update base_color
+sed -i '' "s/^interface\/theme\/base_color = .*/interface\/theme\/base_color = $BACKGROUND_COLOR/" "$GODOT_SETTINGS"
+
+# Update accent_color  
+sed -i '' "s/^interface\/theme\/accent_color = .*/interface\/theme\/accent_color = $ACCENT_COLOR/" "$GODOT_SETTINGS"
+
+echo "✅ Godot theme updated successfully!"
+echo ""
+echo "Next steps:"
+echo "1. Close Godot if it's running"
+echo "2. Restart Godot to see the new theme"
+echo ""
+echo "If something goes wrong, restore from backup:"
+echo "cp \"$GODOT_SETTINGS.backup.$(date +%Y%m%d_%H%M%S)\" \"$GODOT_SETTINGS\""
