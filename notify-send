@@ -1,0 +1,5 @@
+#!/usr/bin/env zsh
+
+title=${2:-"Notification"}
+message=$(curl -s "https://api.dictionaryapi.dev/api/v2/entries/en_US/$2" | jq -r '.[0].meanings[] | "\(.partOfSpeech): \(.definitions[0].definition)\n"')
+osascript -e "display notification \"$message\" with title \"$title\" sound name \"Submarine\""
