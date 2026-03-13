@@ -1,3 +1,54 @@
 #!/usr/bin/env zsh
 
-st -e calcurse
+# read pywal colors
+COLORS=~/.cache/wal/colors.json
+BG=$(python3 -c "import json; d=json.load(open('$COLORS')); print(d['colors']['color0'])")
+FG=$(python3 -c "import json; d=json.load(open('$COLORS')); print(d['colors']['color7'])")
+HL=$(python3 -c "import json; d=json.load(open('$COLORS')); print(d['colors']['color1'])")
+
+HTML=~/cal.html
+
+cat > $HTML << EOF
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { background: ${BG}; color: ${FG}; font-family: 'Monocraft', monospace; font-size: 18px; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+  .today { background: ${HL}; color: ${BG}; }
+</style>
+</head>
+<body>
+<pre id="cal"></pre>
+<script>
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const today = now.getDate();
+  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const pre = document.getElementById("cal");
+  pre.innerHTML = \`   \${monthNames[month]} \${year}\nSu Mo Tu We Th Fr Sa\n\`;
+
+  let day = 1;
+  for (let r = 0; r < 6; r++) {
+    for (let c = 0; c < 7; c++) {
+      if (r === 0 && c < firstDay) pre.innerHTML += "   ";
+      else if (day > daysInMonth) pre.innerHTML += "   ";
+      else {
+        const pad = String(day).padStart(2);
+        if (day === today) pre.innerHTML += \`<span class="today">\${pad}</span> \`;
+        else pre.innerHTML += pad + " ";
+        day++;
+      }
+    }
+    pre.innerHTML += "\n";
+    if (day > daysInMonth) break;
+  }
+</script>
+</body>
+</html>
+EOF
+
+/opt/homebrew/bin/chromium --app=file://$HTML &

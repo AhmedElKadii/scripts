@@ -1,0 +1,246 @@
+#!/usr/bin/env node
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const { diffLines } = require('diff');
+
+const args = process.argv.slice(2);
+if (args.length < 2) {
+  console.error('Usage: node server.js <dirA> <dirB> [--output <outDir>]');
+  process.exit(1);
+}
+
+const dirA = path.resolve(args[0]);
+const dirB = path.resolve(args[1]);
+let outputDir = dirA; // default: apply changes to dirA
+const outIdx = args.indexOf('--output');
+if (outIdx !== -1 && args[outIdx + 1]) outputDir = path.resolve(args[outIdx + 1]);
+
+if (!fs.existsSync(dirA) || !fs.existsSync(dirB)) {
+  console.error('Both directories must exist.');
+  process.exit(1);
+}
+
+function walkDir(dir, base = dir) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  let files = [];
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    const rel = path.relative(base, full);
+    if (e.isDirectory()) {
+      files = files.concat(walkDir(full, base));
+    } else {
+      files.push(rel);
+    }
+  }
+  return files;
+}
+
+function buildDiff() {
+  const filesA = new Set(walkDir(dirA));
+  const filesB = new Set(walkDir(dirB));
+  const allFiles = new Set([...filesA, ...filesB]);
+
+  const result = [];
+  for (const rel of [...allFiles].sort()) {
+    const pathA = path.join(dirA, rel);
+    const pathB = path.join(dirB, rel);
+    const inA = filesA.has(rel);
+    const inB = filesB.has(rel);
+
+    let status, hunks = [], contentA = '', contentB = '';
+
+    if (inA && !inB) {
+      status = 'deleted';
+      contentA = fs.readFileSync(pathA, 'utf8');
+    } else if (!inA && inB) {
+      status = 'added';
+      contentB = fs.readFileSync(pathB, 'utf8');
+    } else {
+      contentA = fs.readFileSync(pathA, 'utf8');
+      contentB = fs.readFileSync(pathB, 'utf8');
+      if (contentA === contentB) {
+        status = 'unchanged';
+      } else {
+        status = 'modified';
+        // Build hunks with context
+        const rawDiff = diffLines(contentA, contentB);
+        hunks = buildHunks(rawDiff);
+      }
+    }
+
+    result.push({ rel, status, hunks, contentA, contentB });
+  }
+  return result;
+}
+
+function buildHunks(parts) {
+  const CONTEXT = 3;
+  // Expand to lines with metadata
+  const lines = [];
+  for (const part of parts) {
+    const ls = part.value.split('\n');
+    if (ls[ls.length - 1] === '') ls.pop();
+    for (const l of ls) {
+      lines.push({ text: l, added: !!part.added, removed: !!part.removed });
+    }
+  }
+
+  // Find changed line indices
+  const changed = new Set();
+  lines.forEach((l, i) => { if (l.added || l.removed) changed.add(i); });
+
+  // Group into hunks with context
+  const hunks = [];
+  let i = 0;
+  while (i < lines.length) {
+    if (!changed.has(i)) { i++; continue; }
+    const start = Math.max(0, i - CONTEXT);
+    let end = i;
+    while (end < lines.length && (changed.has(end) || end < i + CONTEXT)) end++;
+    end = Math.min(lines.length - 1, end + CONTEXT - 1);
+
+    hunks.push({
+      id: `hunk_${hunks.length}`,
+      lines: lines.slice(start, end + 1).map((l, idx) => ({
+        ...l,
+        lineNum: start + idx
+      }))
+    });
+    i = end + 1;
+  }
+  return hunks;
+}
+
+const app = express();
+app.use(express.json());
+
+// Serve frontend
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Get diff data
+app.get('/api/diff', (req, res) => {
+  try {
+    const diff = buildDiff();
+    res.json({ dirA, dirB, outputDir, diff });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Apply selected changes
+app.post('/api/apply', (req, res) => {
+  const { decisions } = req.body;
+  // decisions: { [rel]: 'keep_a' | 'keep_b' | 'skip' | { hunks: { [hunkId]: 'a' | 'b' } } }
+  const log = [];
+
+  for (const [rel, decision] of Object.entries(decisions)) {
+    const pathA = path.join(dirA, rel);
+    const pathB = path.join(dirB, rel);
+    const outPath = path.join(outputDir, rel);
+    const inA = fs.existsSync(pathA);
+    const inB = fs.existsSync(pathB);
+
+    try {
+      if (decision === 'keep_b' || decision === 'accept') {
+        // Copy B to output
+        fs.mkdirSync(path.dirname(outPath), { recursive: true });
+        fs.copyFileSync(pathB, outPath);
+        log.push({ rel, action: 'applied_b' });
+      } else if (decision === 'keep_a' || decision === 'reject') {
+        // Keep A (do nothing if output is A, or copy A)
+        if (outputDir !== dirA) {
+          fs.mkdirSync(path.dirname(outPath), { recursive: true });
+          if (inA) fs.copyFileSync(pathA, outPath);
+        }
+        log.push({ rel, action: 'kept_a' });
+      } else if (decision === 'delete') {
+        if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+        log.push({ rel, action: 'deleted' });
+      } else if (decision && typeof decision === 'object' && decision.hunks) {
+        // Per-hunk merge
+        const contentA = inA ? fs.readFileSync(pathA, 'utf8') : '';
+        const contentB = inB ? fs.readFileSync(pathB, 'utf8') : '';
+        const rawDiff = diffLines(contentA, contentB);
+        const merged = applyHunkDecisions(rawDiff, decision.hunks);
+        fs.mkdirSync(path.dirname(outPath), { recursive: true });
+        fs.writeFileSync(outPath, merged, 'utf8');
+        log.push({ rel, action: 'merged' });
+      }
+    } catch (e) {
+      log.push({ rel, action: 'error', message: e.message });
+    }
+  }
+
+  res.json({ ok: true, log });
+});
+
+function applyHunkDecisions(parts, hunkDecisions) {
+  // Rebuild merged content: for each hunk, use A or B version
+  // Simplified: reconstruct by going through diff parts
+  const CONTEXT = 3;
+  const lines = [];
+  for (const part of parts) {
+    const ls = part.value.split('\n');
+    if (ls[ls.length - 1] === '') ls.pop();
+    for (const l of ls) {
+      lines.push({ text: l, added: !!part.added, removed: !!part.removed });
+    }
+  }
+
+  const changed = new Set();
+  lines.forEach((l, i) => { if (l.added || l.removed) changed.add(i); });
+
+  const hunkRanges = [];
+  let i = 0;
+  let hunkIdx = 0;
+  while (i < lines.length) {
+    if (!changed.has(i)) { i++; continue; }
+    const start = Math.max(0, i - CONTEXT);
+    let end = i;
+    while (end < lines.length && (changed.has(end) || end < i + CONTEXT)) end++;
+    end = Math.min(lines.length - 1, end + CONTEXT - 1);
+    hunkRanges.push({ id: `hunk_${hunkIdx}`, start, end });
+    hunkIdx++;
+    i = end + 1;
+  }
+
+  // Build output line by line
+  const covered = new Set();
+  const hunkLineMap = {};
+  for (const h of hunkRanges) {
+    for (let j = h.start; j <= h.end; j++) {
+      covered.add(j);
+      hunkLineMap[j] = h.id;
+    }
+  }
+
+  const out = [];
+  for (let j = 0; j < lines.length; j++) {
+    const l = lines[j];
+    if (!covered.has(j)) {
+      // Context outside any hunk — include if it's not added/removed
+      if (!l.added && !l.removed) out.push(l.text);
+      continue;
+    }
+    const hunkId = hunkLineMap[j];
+    const decision = hunkDecisions[hunkId] || 'b'; // default accept
+    if (decision === 'b') {
+      if (!l.removed) out.push(l.text);
+    } else {
+      if (!l.added) out.push(l.text);
+    }
+  }
+
+  return out.join('\n') + '\n';
+}
+
+const PORT = 7842;
+app.listen(PORT, () => {
+  console.log(`\n✦ DiffMerge running at http://localhost:${PORT}`);
+  console.log(`  A: ${dirA}`);
+  console.log(`  B: ${dirB}`);
+  console.log(`  Output: ${outputDir}\n`);
+});

@@ -1,0 +1,5 @@
+#!/usr/bin/env zsh
+
+HTML='/Users/kadii/Library/Mobile Documents/com~apple~CloudDocs/Documents/draft.html'
+
+/opt/homebrew/bin/chromium --app=file://$HTML &

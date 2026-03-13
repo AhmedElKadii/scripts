@@ -1,0 +1,13 @@
+#!/usr/bin/env zsh
+
+FILE=$1
+BASE="${FILE%.tex}"
+
+pdflatex -interaction nonstopmode "$FILE"
+biber "$BASE"
+pdflatex -interaction nonstopmode "$FILE"
+pdflatex -interaction nonstopmode "$FILE"
+
+mkdir -p .pdf
+mv "$BASE.pdf" .pdf/
+rm -f "$BASE".{aux,log,out,run.xml,tex,toc,bbl,blg,fls,fdb_latexmk,bcf}

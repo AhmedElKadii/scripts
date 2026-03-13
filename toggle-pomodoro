@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+pom_status=$($HOME/go/bin/pomodoro status 2>/dev/null)
+
+if [ "$pom_status" == "" ]; then
+    $HOME/go/bin/pomodoro start
+else
+    $HOME/go/bin/pomodoro cancel
+fi

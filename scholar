@@ -1,0 +1,17 @@
+#!/urs/bin/env zsh
+
+URL="https://scholar.google.com/scholar?q=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$1")"
+
+/opt/homebrew/bin/chromium --app="$URL" &
+
+elapsed=0
+while [[ $elapsed -lt 20 ]]; do
+    focused_app=$(yabai -m query --windows --window 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['app'])" 2>/dev/null)
+    if [[ "$focused_app" == "Chromium" ]]; then
+        yabai -m window --toggle float
+        yabai -m window --grid 4:4:1:1:2:2
+        break
+    fi
+    sleep 0.1
+    ((elapsed++))
+done

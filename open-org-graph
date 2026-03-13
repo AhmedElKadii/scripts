@@ -1,0 +1,8 @@
+#!/usr/bin/env zsh
+
+/opt/homebrew/bin/chromium --app="http://localhost:35901" &>/dev/null &
+sleep 1
+CHROME_ID=$(yabai -m query --windows | jq '[.[] | select(.app=="Chromium")] | last | .id')
+yabai -m window --focus $CHROME_ID
+yabai -m window --warp east
+yabai -m window --ratio abs:0.8

@@ -1,0 +1,22 @@
+#!/usr/bin/env zsh
+
+if yabai -m query --windows | jq -e '.[] | select(.app == "Emacs")' > /dev/null 2>&1; then
+	win_id=$(yabai -m query --windows | jq '.[] | select(.app == "Emacs") | .id' | head -1)
+	yabai -m window "$win_id" --space 3
+else
+	yabai -m space --focus 3
+	open -a Emacs
+	# Wait for Emacs window to appear
+	for i in $(seq 1 20); do
+		sleep 0.5
+		win_id=$(yabai -m query --windows | jq '.[] | select(.app == "Emacs") | .id' | head -1)
+		[ -n "$win_id" ] && break
+	done
+	# Now move it to space 3
+	yabai -m window "$win_id" --space 3
+fi
+
+yabai -m space --focus 3
+sleep 0.2
+win_id=$(yabai -m query --windows --space | jq '.[] | select(.app == "Emacs") | .id' | head -1)
+yabai -m window --focus "$win_id"
